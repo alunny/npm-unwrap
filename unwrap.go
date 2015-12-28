@@ -1,7 +1,6 @@
 package main
 
 import (
-  "fmt"
   "os"
   "log"
 
@@ -21,5 +20,5 @@ func main() {
     log.Fatal(err)
   }
 
-  fmt.Printf("%s @ %s\n", app.Name, app.Version)
+  npm.PrintApp(app)
 }
