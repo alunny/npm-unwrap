@@ -48,7 +48,7 @@ func (m *Module) Download(client *http.Client) {
 	resp, _ := client.Get(m.Resolved)
 
 	/*
-	if err != nil { }
+		if err != nil { }
 	*/
 
 	fmt.Printf("Completed downloading %s with status '%s'\n", m.Name, resp.Status)
