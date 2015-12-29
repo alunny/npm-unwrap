@@ -9,10 +9,10 @@ import (
 
 func main() {
   shrinkwrapReader, err := os.Open("./npm-shrinkwrap.json")
-
   if err != nil {
     log.Fatal("could not read ./npm-shrinkwrap.json")
   }
+  defer shrinkwrapReader.Close()
 
   app, err := npm.ParseApp(shrinkwrapReader)
 
@@ -21,4 +21,6 @@ func main() {
   }
 
   npm.PrintApp(app)
+
+  app.Install()
 }

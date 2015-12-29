@@ -16,4 +16,3 @@ func printDependencies(deps []Module, indent int) {
     printDependencies(dep.Dependencies, indent + 2)
   }
 }
-
