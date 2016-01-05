@@ -18,8 +18,6 @@ type Download struct {
 	resultChan	chan int
 }
 
-//var downloadChannel = make(chan *Download, MaxConcurrentDownloads)
-
 func (a *App) Install() {
 	var wg sync.WaitGroup
 	client := &http.Client{}
@@ -49,14 +47,22 @@ func (a *App) Install() {
 
 // goroutine to handle incoming downloads
 func processDownloads(downloads chan *Download, quit chan bool, client *http.Client, tmpdir string) {
-	for range downloads {
-		download := <-downloads
-		go func(dl Download) {
-			dl.module.Download(client, tmpdir)
-			dl.resultChan <- 1
-		}(*download)
+	for {
+		select {
+		case download := <-downloads:
+			go func(dl *Download) {
+				fmt.Printf("starting:\t %s\n", dl.module.Name)
+				dl.module.Download(client, tmpdir)
+				dl.resultChan <- 1
+			}(download)
+
+		case <-quit:
+			return
+
+		default:
+			continue
+		}
 	}
-	<-quit
 }
 
 func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
@@ -66,10 +72,12 @@ func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
 
 	go func() {
 		defer wg.Done()
+		fmt.Printf("queueing:\t %s\n", m.Name)
 		downloadResult := make(chan int)
 		downloadChannel <- &Download{m, downloadResult}
+		fmt.Printf("queued:\t %s\n", m.Name)
 		<-downloadResult
-		fmt.Printf("done with %s\n", m.Name)
+		fmt.Printf("completed:\t %s\n", m.Name)
 	}()
 
 	for _, dep := range m.Dependencies {
@@ -77,7 +85,7 @@ func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
 		go func(module Module) {
 			defer wg.Done()
 			module.Install(client, downloadChannel)
-			fmt.Printf("done with %s\n", module.Name)
+			fmt.Printf("installed:\t %s\n", module.Name)
 		}(dep)
 	}
 

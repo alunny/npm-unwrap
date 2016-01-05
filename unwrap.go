@@ -23,7 +23,7 @@ func install() {
 		log.Fatal(err)
 	}
 
-	npm.PrintApp(app)
+	// npm.PrintApp(app)
 
 	app.Install()
 }
