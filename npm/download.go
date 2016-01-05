@@ -55,7 +55,7 @@ func processDownloads(downloads chan *Download, quit chan bool, client *http.Cli
 
 func handleDownload(downloads chan *Download, client *http.Client, tmpdir string) {
 	for dl := range downloads {
-		fmt.Printf("starting:\t %s\n", dl.module.Name)
+		// fmt.Printf("starting:\t %s\n", dl.module.Name)
 		dl.module.Download(client, tmpdir)
 		dl.resultChan <- 1
 	}
@@ -68,12 +68,12 @@ func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
 
 	go func() {
 		defer wg.Done()
-		fmt.Printf("queueing:\t %s\n", m.Name)
+		// fmt.Printf("queueing:\t %s\n", m.Name)
 		downloadResult := make(chan int)
 		downloadChannel <- &Download{m, downloadResult}
-		fmt.Printf("queued:\t %s\n", m.Name)
+		// fmt.Printf("queued:\t %s\n", m.Name)
 		<-downloadResult
-		fmt.Printf("completed:\t %s\n", m.Name)
+		// fmt.Printf("completed:\t %s\n", m.Name)
 	}()
 
 	for _, dep := range m.Dependencies {
@@ -81,7 +81,7 @@ func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
 		go func(module Module) {
 			defer wg.Done()
 			module.Install(client, downloadChannel)
-			fmt.Printf("installed:\t %s\n", module.Name)
+			// fmt.Printf("installed:\t %s\n", module.Name)
 		}(dep)
 	}
 
@@ -89,6 +89,13 @@ func (m *Module) Install(client *http.Client, downloadChannel chan *Download) {
 }
 
 func (m *Module) Download(client *http.Client, directory string) {
+	if (m.Resolved == "") {
+		// use `npm view mName@m.Version dist.tarball` to see the URL to fetch
+		fmt.Printf("cannot download %s@%s - no resolved field\n", m.Name, m.Version)
+	}
+
+	// TODO: handle git+https? pseudo-URLs
+
 	// fmt.Printf("Downloading %s from %s\n", m.Name, m.Resolved)
 
 	resp, err := client.Get(m.Resolved)
