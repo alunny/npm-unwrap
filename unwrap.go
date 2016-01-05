@@ -25,7 +25,8 @@ func install() {
 
 	// npm.PrintApp(app)
 
-	app.Install()
+	app.DownloadDependencies()
+	// app.Install()
 }
 
 func main() {

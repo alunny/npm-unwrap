@@ -8,14 +8,62 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
 const MaxConcurrentDownloads = 20
 
-type Download struct {
-	module			*Module
-	resultChan	chan int
+func (a *App) DownloadDependencies() {
+	deps, err := depsSlice(a)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sort.Strings(deps)
+
+	fmt.Printf("total dependencies: %d\n", len(deps))
+
+	deduped := dedupeSlice(deps)
+
+	for _, dep := range deduped {
+		fmt.Println(dep)
+	}
+
+	fmt.Printf("deduped dependencies: %d\n", len(deduped))
+
+	// make slice of all dependency URLs
+	// dedupe slice
+	// download all files - 20 in parallel
+}
+
+func depsSlice(pkg Package) (urls []string, error error) {
+	for _, dep := range pkg.DependencyList() {
+		// handle empty string as dep.Resolved
+		urls = append(urls, dep.Resolved)
+
+		depDeps, err := depsSlice(dep)
+		if err != nil {
+			return urls, err
+		}
+
+		urls = append(urls, depDeps...)
+	}
+
+	return urls, error
+}
+
+// takes sorted slice orig, returns deduped (still sorted) slice
+func dedupeSlice(orig []string) (deduped []string) {
+	deduped = make([]string, 0, len(orig))
+
+	for i := 0; i < len(orig); i++ {
+		if len(deduped) == 0 || deduped[len(deduped) - 1] != orig[i] {
+			deduped = append(deduped, orig[i])
+		}
+	}
+
+	return deduped
 }
 
 func (a *App) Install() {

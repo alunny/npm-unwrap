@@ -16,3 +16,20 @@ type App struct {
 	Version      string
 	Dependencies []Module
 }
+
+type Package interface {
+	DependencyList() []Module
+}
+
+func (m Module) DependencyList() (deps []Module) {
+	return m.Dependencies
+}
+
+func (a App) DependencyList() (deps []Module) {
+	return a.Dependencies
+}
+
+type Download struct {
+	module		*Module
+	resultChan	chan int
+}
