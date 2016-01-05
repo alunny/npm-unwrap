@@ -47,21 +47,17 @@ func (a *App) Install() {
 
 // goroutine to handle incoming downloads
 func processDownloads(downloads chan *Download, quit chan bool, client *http.Client, tmpdir string) {
-	for {
-		select {
-		case download := <-downloads:
-			go func(dl *Download) {
-				fmt.Printf("starting:\t %s\n", dl.module.Name)
-				dl.module.Download(client, tmpdir)
-				dl.resultChan <- 1
-			}(download)
+	for i := 0; i < MaxConcurrentDownloads; i++ {
+		go handleDownload(downloads, client, tmpdir)
+	}
+	<-quit
+}
 
-		case <-quit:
-			return
-
-		default:
-			continue
-		}
+func handleDownload(downloads chan *Download, client *http.Client, tmpdir string) {
+	for dl := range downloads {
+		fmt.Printf("starting:\t %s\n", dl.module.Name)
+		dl.module.Download(client, tmpdir)
+		dl.resultChan <- 1
 	}
 }
 
@@ -98,6 +94,7 @@ func (m *Module) Download(client *http.Client, directory string) {
 	resp, err := client.Get(m.Resolved)
 	if err != nil {
 		fmt.Printf("Error downloading %s from '%s'\n", m.Name, m.Resolved)
+		log.Println(err)
 		return
 	}
 	defer resp.Body.Close()
