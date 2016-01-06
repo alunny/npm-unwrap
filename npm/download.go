@@ -16,27 +16,30 @@ import (
 const MaxConcurrentDownloads = 20
 
 func (a *App) DownloadDependencies() {
-	deps, err := depsSlice(a)
+	deps, gitDeps, err := depsSlice(a)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	sort.Strings(deps)
+	sort.Strings(gitDeps)
 
-	fmt.Printf("total dependencies: %d\n", len(deps))
+	deps = dedupeSlice(deps)
+	gitDeps = dedupeSlice(gitDeps)
 
-	deduped := dedupeSlice(deps)
+	fmt.Printf("tarball dependencies: %d\n", len(deps))
+	fmt.Printf("git dependencies: %d\n", len(gitDeps))
 
-	fmt.Printf("deduped dependencies: %d\n", len(deduped))
-
+	/*
 	for _, dep := range deduped {
 		fmt.Println(dep)
 	}
+	*/
 
 	// download all files - 20 in parallel
 }
 
-func depsSlice(pkg Package) (urls []string, error error) {
+func depsSlice(pkg Package) (urls []string, gitUrls []string, error error) {
 	for _, dep := range pkg.DependencyList() {
 		if dep.Resolved == "" {
 			fmt.Printf("[WARNING] empty resolved field for %s@%s\n", dep.Name, dep.Version)
@@ -45,22 +48,21 @@ func depsSlice(pkg Package) (urls []string, error error) {
 
 		if strings.HasPrefix(dep.Resolved, "git+") {
 			fmt.Printf("[WARNING] git url for %s\n%s\n", dep.Name, dep.Resolved)
-			continue
-
+			gitUrls = append(gitUrls, dep.Resolved)
+		} else {
+			urls = append(urls, dep.Resolved)
 		}
 
-		// TODO: handle empty string under dep.Resolved
-		urls = append(urls, dep.Resolved)
-
-		depDeps, err := depsSlice(dep)
+		depDeps, gitDeps, err := depsSlice(dep)
 		if err != nil {
-			return urls, err
+			return urls, gitUrls, err
 		}
 
 		urls = append(urls, depDeps...)
+		gitUrls = append(gitUrls, gitDeps...)
 	}
 
-	return urls, error
+	return urls, gitUrls, error
 }
 
 // takes sorted slice orig, returns deduped (still sorted) slice
