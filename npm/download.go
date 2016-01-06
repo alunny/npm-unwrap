@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -26,20 +27,29 @@ func (a *App) DownloadDependencies() {
 
 	deduped := dedupeSlice(deps)
 
+	fmt.Printf("deduped dependencies: %d\n", len(deduped))
+
 	for _, dep := range deduped {
 		fmt.Println(dep)
 	}
 
-	fmt.Printf("deduped dependencies: %d\n", len(deduped))
-
-	// make slice of all dependency URLs
-	// dedupe slice
 	// download all files - 20 in parallel
 }
 
 func depsSlice(pkg Package) (urls []string, error error) {
 	for _, dep := range pkg.DependencyList() {
-		// handle empty string as dep.Resolved
+		if dep.Resolved == "" {
+			fmt.Printf("[WARNING] empty resolved field for %s@%s\n", dep.Name, dep.Version)
+			continue
+		}
+
+		if strings.HasPrefix(dep.Resolved, "git+") {
+			fmt.Printf("[WARNING] git url for %s\n%s\n", dep.Name, dep.Resolved)
+			continue
+
+		}
+
+		// TODO: handle empty string under dep.Resolved
 		urls = append(urls, dep.Resolved)
 
 		depDeps, err := depsSlice(dep)
