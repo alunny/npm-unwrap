@@ -3,6 +3,7 @@ package npm
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -36,12 +37,25 @@ func (a *App) DownloadDependencies() {
 	}
 	*/
 
-	// download all files - 20 in parallel
+	// download all files - MaxConcurrentDownloads concurrently
+	tmpdir, err := downloadTarballs(a.Name, deps)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("downloaded dependencies to %s\n", tmpdir)
+
+	// get all git repos
 }
 
+/*
+ * takes package with tree of dependencies, returns slice of URL dependencies (tarballs)
+ * and slice of git dependencies (repo URLs + refs)
+ */
 func depsSlice(pkg Package) (urls []string, gitUrls []string, error error) {
 	for _, dep := range pkg.DependencyList() {
 		if dep.Resolved == "" {
+			// TODO: potentially resolve with npm-view
 			fmt.Printf("[WARNING] empty resolved field for %s@%s\n", dep.Name, dep.Version)
 			continue
 		}
@@ -76,6 +90,69 @@ func dedupeSlice(orig []string) (deduped []string) {
 	}
 
 	return deduped
+}
+
+func downloadTarballs(appName string, tarballs []string) (tmpdir string, err error) {
+	var wg sync.WaitGroup
+	client := &http.Client{}
+	tmpdir, err = ioutil.TempDir("", appName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	downloads := make(chan string, MaxConcurrentDownloads)
+	quit := make(chan bool)
+
+	go func() {
+		for i := 0; i < MaxConcurrentDownloads; i++ {
+			fmt.Println("add to wg")
+			wg.Add(1)
+			go getTarball(i, tmpdir, downloads, client, &wg)
+		}
+		<-quit
+	}()
+
+	for _, url := range tarballs {
+		downloads <- url
+	}
+	close(downloads)
+
+	wg.Wait()
+	quit <- true
+
+	return
+}
+
+func getTarball(id int, tmpdir string, downloads chan string, client *http.Client, wg *sync.WaitGroup) (err error) {
+	for dl := range downloads {
+		err = downloadUrl(tmpdir, dl, client)
+		if err != nil {
+			fmt.Printf("Error downloading %s\n", dl)
+			log.Fatal(err)
+		}
+	}
+	wg.Done()
+	return
+}
+
+func downloadUrl(tmpdir string, url string, client *http.Client) (error error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return
+	}
+	// fmt.Printf("downloaded %s\n", url)
+	defer resp.Body.Close()
+
+	target := filepath.Join(tmpdir, path.Base(url))
+	output, err := os.Create(target)
+	if err != nil {
+		return
+	}
+	defer output.Close()
+
+	io.Copy(output, resp.Body)
+
+	return
 }
 
 func (a *App) Install() {
