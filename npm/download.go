@@ -92,6 +92,14 @@ func dedupeSlice(orig []string) (deduped []string) {
 	return deduped
 }
 
+func minInt(a int, b int) (min int) {
+	if a < b {
+		return a
+	} else {
+		return b
+	}
+}
+
 func downloadTarballs(appName string, tarballs []string) (tmpdir string, err error) {
 	var wg sync.WaitGroup
 	client := &http.Client{}
@@ -103,10 +111,12 @@ func downloadTarballs(appName string, tarballs []string) (tmpdir string, err err
 	downloads := make(chan string, MaxConcurrentDownloads)
 	quit := make(chan bool)
 
+	workerCount := minInt(MaxConcurrentDownloads, len(tarballs))
+	workerCount = 1
+
+	wg.Add(workerCount)
 	go func() {
-		for i := 0; i < MaxConcurrentDownloads; i++ {
-			fmt.Println("add to wg")
-			wg.Add(1)
+		for i := 0; i < workerCount; i++ {
 			go getTarball(i, tmpdir, downloads, client, &wg)
 		}
 		<-quit
