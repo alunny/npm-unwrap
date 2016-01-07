@@ -8,19 +8,25 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 )
 
 func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
+	npmbin, err := exec.LookPath("npm")
+	if err != nil {
+		log.Fatal("cannot find npm in $PATH")
+	}
+
 	err = os.MkdirAll(targetDir, 0755)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, module := range a.Dependencies {
-		err = decompressAndInstall(module, tmpdir, targetDir)
+		err = decompressAndInstall(module, tmpdir, targetDir, npmbin)
 		if err != nil {
 			return err
 		}
@@ -29,7 +35,7 @@ func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
 	return
 }
 
-func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error) {
+func decompressAndInstall(m Module, tmpdir string, targetDir string, npmbin string) (err error) {
 	if strings.HasPrefix(m.Resolved, "git+") {
 		fmt.Printf("skipping git url %s\n\t%s\n", m.Resolved, targetDir)
 		return
@@ -54,14 +60,14 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error)
 		}
 
 		for _, module := range m.Dependencies {
-			err = decompressAndInstall(module, tmpdir, nodeModulesDir)
+			err = decompressAndInstall(module, tmpdir, nodeModulesDir, npmbin)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	err = tryInstall(outputDir)
+	err = tryInstall(npmbin, outputDir)
 
 	return
 }
@@ -93,21 +99,36 @@ func decompress(m Module, tmpdir string, targetDir string, outputDir string) (er
 	return
 }
 
-func tryInstall(directory string) (err error) {
+func tryInstall(npmbin string, directory string) (err error) {
+	runInstall := []string{"run-script", "install"}
 	packageJson, err := ioutil.ReadFile(filepath.Join(directory, "package.json"))
 	if err != nil {
 		return
 	}
 
 	//hasInstallScript, err := HasInstallScript(packageJson)
-	_, err = HasInstallScript(packageJson)
+	hasInstall, err := HasInstallScript(packageJson)
 	if err != nil {
 		return
 	}
 
 	// if install script or binding.gyp exists
-	// 	execute that - `npm run-script install`
-	// 	redirecting stdout/stderr correctly
+	if hasInstall {
+		fmt.Printf("run '%s install' for %s\n", npmbin, directory)
+		cmd := exec.Cmd{
+			Path: npmbin,
+			Args: runInstall,
+			Dir: directory,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		}
+		err = cmd.Start()
+		if err != nil {
+			return
+		}
+
+		cmd.Wait()
+	}
 
 	return
 }
