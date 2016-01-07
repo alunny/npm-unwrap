@@ -16,7 +16,7 @@ import (
 
 const MaxConcurrentDownloads = 20
 
-func (a *App) DownloadDependencies() {
+func (a *App) DownloadDependencies() (tmpdir string) {
 	deps, gitDeps, err := depsSlice(a)
 	if err != nil {
 		log.Fatal(err)
@@ -38,7 +38,7 @@ func (a *App) DownloadDependencies() {
 	*/
 
 	// download all files - MaxConcurrentDownloads concurrently
-	tmpdir, err := downloadTarballs(a.Name, deps)
+	tmpdir, err = downloadTarballs(a.Name, deps)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,6 +46,8 @@ func (a *App) DownloadDependencies() {
 	fmt.Printf("downloaded dependencies to %s\n", tmpdir)
 
 	// get all git repos
+
+	return tmpdir
 }
 
 /*

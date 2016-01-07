@@ -25,8 +25,10 @@ func install() {
 
 	// npm.PrintApp(app)
 
-	app.DownloadDependencies()
+	downloadDir := app.DownloadDependencies()
+	// app.DownloadDependencies()
 	// app.Install()
+	app.InstallFromTmpdir(downloadDir, "./node_modules")
 }
 
 func main() {
