@@ -114,7 +114,6 @@ func downloadTarballs(appName string, tarballs []string) (tmpdir string, err err
 	quit := make(chan bool)
 
 	workerCount := minInt(MaxConcurrentDownloads, len(tarballs))
-	workerCount = 1
 
 	wg.Add(workerCount)
 	go func() {
