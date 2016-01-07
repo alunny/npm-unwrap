@@ -34,12 +34,15 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error)
 		fmt.Printf("skipping git url %s\n\t%s\n", m.Resolved, targetDir)
 		return
 	}
+
+	var basePath string
 	if m.Resolved == "" {
-		fmt.Printf("skipping empty path for %s@%s\n\t%s\n", m.Name, m.Version, targetDir)
-		return
+		basePath = fmt.Sprintf("%s-%s.tgz", m.Name, m.Version)
+	} else {
+		basePath = path.Base(m.Resolved)
 	}
 
-	expectedArchive := filepath.Join(tmpdir, path.Base(m.Resolved))
+	expectedArchive := filepath.Join(tmpdir, basePath)
 	tgz, err := os.Open(expectedArchive)
 	if os.IsExist(err) {
 		log.Fatalf("No file at %s\n", expectedArchive)
@@ -133,6 +136,7 @@ func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
 
 // move to separate function to ensure files are correctly closed in spite of errors
 func writeFile(path string, reader io.Reader) (err error) {
+	// TODO: preserve file permissions
 	output, err := os.Create(path)
 	if err != nil {
 		return err
