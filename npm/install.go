@@ -83,7 +83,7 @@ func decompress(m Module, tmpdir string, targetDir string, outputDir string) (er
 	expectedArchive := filepath.Join(tmpdir, basePath)
 
 	tgz, err := os.Open(expectedArchive)
-	if os.IsExist(err) {
+	if os.IsNotExist(err) {
 		log.Fatalf("No file at %s\n", expectedArchive)
 	}
 	if err != nil {
@@ -112,8 +112,19 @@ func tryInstall(npmbin string, directory string) (err error) {
 		return
 	}
 
-	// if install script or binding.gyp exists
-	if hasInstall {
+	// check for binding.gyp
+	var hasBindingGyp bool
+	_, err = os.Stat(filepath.Join(directory, "binding.gyp"))
+	if os.IsNotExist(err) {
+		err = nil
+		hasBindingGyp = false
+	} else if err != nil {
+		return
+	} else {
+		hasBindingGyp = true
+	}
+
+	if hasInstall || hasBindingGyp {
 		fmt.Printf("run '%s install' for %s\n", npmbin, directory)
 		cmd := exec.Cmd{
 			Path: npmbin,
