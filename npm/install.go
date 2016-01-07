@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -21,9 +22,8 @@ func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
 	for _, module := range a.Dependencies {
 		err = decompressAndInstall(module, tmpdir, targetDir)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-
 	}
 
 	return
@@ -35,30 +35,13 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error)
 		return
 	}
 
-	var basePath string
-	if m.Resolved == "" {
-		basePath = fmt.Sprintf("%s-%s.tgz", m.Name, m.Version)
-	} else {
-		basePath = path.Base(m.Resolved)
-	}
-
-	expectedArchive := filepath.Join(tmpdir, basePath)
-	tgz, err := os.Open(expectedArchive)
-	if os.IsExist(err) {
-		log.Fatalf("No file at %s\n", expectedArchive)
-	}
-	if err != nil {
-		return err
-	}
-	defer tgz.Close()
-
 	outputDir := filepath.Join(targetDir, m.Name)
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
 		return err
 	}
 
-	err = uncompressAndExtract(tgz, outputDir)
+	err = decompress(m, tmpdir, targetDir, outputDir)
 	if err != nil {
 		return err
 	}
@@ -77,6 +60,54 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error)
 			}
 		}
 	}
+
+	err = tryInstall(outputDir)
+
+	return
+}
+
+func decompress(m Module, tmpdir string, targetDir string, outputDir string) (err error) {
+	var basePath string
+	if m.Resolved == "" {
+		basePath = fmt.Sprintf("%s-%s.tgz", m.Name, m.Version)
+	} else {
+		basePath = path.Base(m.Resolved)
+	}
+
+	expectedArchive := filepath.Join(tmpdir, basePath)
+
+	tgz, err := os.Open(expectedArchive)
+	if os.IsExist(err) {
+		log.Fatalf("No file at %s\n", expectedArchive)
+	}
+	if err != nil {
+		return err
+	}
+	defer tgz.Close()
+
+	err = uncompressAndExtract(tgz, outputDir)
+	if err != nil {
+		return err
+	}
+
+	return
+}
+
+func tryInstall(directory string) (err error) {
+	packageJson, err := ioutil.ReadFile(filepath.Join(directory, "package.json"))
+	if err != nil {
+		return
+	}
+
+	//hasInstallScript, err := HasInstallScript(packageJson)
+	_, err = HasInstallScript(packageJson)
+	if err != nil {
+		return
+	}
+
+	// if install script or binding.gyp exists
+	// 	execute that - `npm run-script install`
+	// 	redirecting stdout/stderr correctly
 
 	return
 }

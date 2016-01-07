@@ -115,6 +115,8 @@ func mkDependencies(dec *json.Decoder) (deps []Module, error error) {
 	}
 }
 
+// ParseApp reads the npm-shrinkwrap.json data from r, and returns an App object that can be
+// traversed to find all dependencies
 func ParseApp(r io.Reader) (app App, error error) {
 	dec := json.NewDecoder(r)
 	app = App{}
@@ -176,4 +178,37 @@ func ParseApp(r io.Reader) (app App, error error) {
 	}
 
 	return app, nil
+}
+
+// ParseApp reads the package.json data from r, and returns a boolean value if there is
+// a "scripts/install" field. If it cannot parse the data, an error is returned.
+func HasInstallScript(packageJson []byte) (hasScript bool, err error) {
+	var f interface{}
+	err = json.Unmarshal(packageJson, &f)
+	if err != nil {
+		return
+	}
+
+	m := f.(map[string]interface{})
+	for k, v := range m {
+		switch k {
+		case "scripts":
+			switch scripts := v.(type) {
+			case map[string]interface{}:
+				install := scripts["install"]
+				if install == nil {
+					return
+				}
+				// can cause run-time panic if package is not well-formed
+				install = scripts["install"].(string)
+
+				// fmt.Printf("install script = '%s'\n", install)
+				if scripts["install"] != "" {
+					hasScript = true
+				}
+			}
+		}
+	}
+
+	return
 }
