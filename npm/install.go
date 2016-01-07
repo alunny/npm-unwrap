@@ -90,6 +90,11 @@ func mkPath(entry string, baseDir string) (newPath string) {
 	}
 }
 
+/*
+ based on: https://github.com/npm/npm/blob/2.x/lib/utils/tar.js
+ equivalent to
+ 	gzip {tarball} --decompress --stdout | tar -mvxpf - --strip-components=1 -C {unpackTarget}
+*/
 func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
 	decompressor, err := gzip.NewReader(tgz)
         if err != nil {
