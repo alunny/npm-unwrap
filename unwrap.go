@@ -32,6 +32,8 @@ func install() {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
 

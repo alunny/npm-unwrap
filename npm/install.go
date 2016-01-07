@@ -3,6 +3,7 @@ package npm
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -29,6 +30,15 @@ func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
 }
 
 func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error) {
+	if strings.HasPrefix(m.Resolved, "git+") {
+		fmt.Printf("skipping git url %s\n\t%s\n", m.Resolved, targetDir)
+		return
+	}
+	if m.Resolved == "" {
+		fmt.Printf("skipping empty path for %s@%s\n\t%s\n", m.Name, m.Version, targetDir)
+		return
+	}
+
 	expectedArchive := filepath.Join(tmpdir, path.Base(m.Resolved))
 	tgz, err := os.Open(expectedArchive)
 	if os.IsExist(err) {
@@ -68,8 +78,13 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string) (err error)
 	return
 }
 
-func mkPath(tarName string, baseDir string) (newPath string) {
-        return strings.Replace(tarName, "package", baseDir, 1)
+func mkPath(entry string, baseDir string) (newPath string) {
+	segments := strings.SplitAfterN(entry, string(os.PathSeparator), 2)
+	if len(segments) != 2 {
+		return ""
+	} else {
+		return filepath.Join(baseDir, segments[1])
+	}
 }
 
 func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
@@ -94,25 +109,40 @@ func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
 			continue
 		}
 
-                outputPath := mkPath(header.Name, outputDir)
-                fileDir := filepath.Dir(outputPath)
 
+                outputPath := mkPath(header.Name, outputDir)
+		if outputPath == "" {
+			fmt.Printf("[WARN] invalid entry %s\n", header.Name)
+			continue
+		}
+
+                fileDir := filepath.Dir(outputPath)
                 err = os.MkdirAll(fileDir, 0755)
                 if err != nil {
-                        log.Fatal(err)
+                        return err
                 }
 		// fmt.Println(outputPath)
 
-                output, err := os.Create(outputPath)
+		err = writeFile(outputPath, tarReader)
                 if err != nil {
-                        log.Fatal(err)
-                }
-                defer output.Close()
-
-                _, err = io.Copy(output, tarReader)
-                if err != nil {
-                        log.Fatal(err)
+                        return err
                 }
         }
+	return
+}
+
+// move to separate function to ensure files are correctly closed in spite of errors
+func writeFile(path string, reader io.Reader) (err error) {
+	output, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	_, err = io.Copy(output, reader)
+	if err != nil {
+		return err
+	}
+
 	return
 }
