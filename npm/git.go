@@ -42,7 +42,7 @@ func copyGitModule(m Module, tmpdir string, target string) (err error) {
 			}
 			fmt.Println("created new directory")
 		} else {
-			output, err := os.OpenFile(targetPath, os.O_CREATE | os.O_RDWR, info.Mode())
+			output, err := os.OpenFile(targetPath, os.O_CREATE | os.O_RDWR | os.O_TRUNC, info.Mode())
 			if err != nil {
 				return err
 			}

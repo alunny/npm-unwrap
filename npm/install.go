@@ -132,15 +132,40 @@ func (pkg PackageJSON) linkBinScripts(npmbin string, directory string) (err erro
 		return err
 	}
 
-	for scriptName, scriptPath := range binScripts {
-		source := filepath.Join(directory, scriptPath)
-		target := filepath.Join(binDir, scriptName)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 
-		err = os.Symlink(source, target)
+	os.Chdir(binDir)
+	for scriptName, scriptPath := range binScripts {
+		attemptedPath := filepath.Join(binDir, scriptName)
+		source := filepath.Join(directory, scriptPath)
+
+		target, err := filepath.Rel(binDir, source)
 		if err != nil {
 			return err
 		}
+
+		err = os.Symlink(target, scriptName)
+		if os.IsExist(err) {
+			log.Printf("[WARN] symlink: %s already exists\n", attemptedPath)
+			err = nil
+		}
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+
+		// bin scripts must always be executable
+		// see https://github.com/npm/npm/blob/2.x/lib/build.js#L190
+		err = os.Chmod(target, 0777)
+		if err != nil {
+			log.Printf("[FATAL] %s is not executable\n", attemptedPath)
+			return err
+		}
 	}
+	os.Chdir(oldDir)
 
 	return
 }
@@ -233,9 +258,8 @@ func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
                 if err != nil {
                         return err
                 }
-		// fmt.Println(outputPath)
 
-		err = writeFile(outputPath, tarReader)
+		err = writeFile(outputPath, header.FileInfo(), tarReader)
                 if err != nil {
                         return err
                 }
@@ -244,16 +268,17 @@ func uncompressAndExtract(tgz *os.File, outputDir string) (err error) {
 }
 
 // move to separate function to ensure files are correctly closed in spite of errors
-func writeFile(path string, reader io.Reader) (err error) {
-	// TODO: preserve file permissions
-	output, err := os.Create(path)
+func writeFile(path string, info os.FileInfo, reader io.Reader) (err error) {
+	output, err := os.OpenFile(path, os.O_CREATE | os.O_RDWR | os.O_TRUNC, info.Mode())
 	if err != nil {
+		log.Fatal(err)
 		return err
 	}
 	defer output.Close()
 
 	_, err = io.Copy(output, reader)
 	if err != nil {
+		log.Fatal(err)
 		return err
 	}
 
