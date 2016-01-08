@@ -105,7 +105,7 @@ func decompress(m Module, tmpdir string, outputDir string) (err error) {
 }
 
 func tryInstall(npmbin string, directory string) (err error) {
-	runInstall := []string{"run-script", "install"}
+	runInstall := []string{"run-script", "install", "--production"}
 	packageJson, err := ioutil.ReadFile(filepath.Join(directory, "package.json"))
 	if err != nil {
 		return

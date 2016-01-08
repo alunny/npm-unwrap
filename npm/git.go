@@ -35,7 +35,6 @@ func copyGitModule(m Module, tmpdir string, target string) (err error) {
 		relativePath := strings.TrimPrefix(path, sourceDir)
 		targetPath := filepath.Join(target, relativePath)
 
-		fmt.Printf("%s, mode: %t, move to %s\n", relativePath, info.Mode(), targetPath)
 		if info.IsDir() {
 			err = os.MkdirAll(targetPath, info.Mode())
 			if err != nil {
