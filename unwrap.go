@@ -31,6 +31,8 @@ func install() {
 	// app.DownloadDependencies()
 	// app.Install()
 	// app.InstallFromTmpdir("./postinstall", "./node_modules")
+
+	// prune afterwards
 }
 
 func main() {

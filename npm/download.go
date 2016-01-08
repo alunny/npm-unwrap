@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -79,6 +80,7 @@ func depsSlice(pkg Package) (urls []string, gitModules []Module, error error) {
 
 		depDeps, gitDeps, err := depsSlice(dep)
 		if err != nil {
+			log.Fatal(err)
 			return urls, gitModules, err
 		}
 
@@ -127,8 +129,8 @@ func downloadTarballs(tmpdir string, tarballs []string) (err error) {
 		<-quit
 	}()
 
-	for _, url := range tarballs {
-		downloads <- url
+	for _, tarUrl := range tarballs {
+		downloads <- tarUrl
 	}
 	close(downloads)
 
@@ -205,22 +207,43 @@ func getTarball(id int, tmpdir string, downloads chan string, client *http.Clien
 			log.Fatal(err)
 		}
 	}
+	log.Printf("done with worker %d\n", id)
 	wg.Done()
 	return
 }
 
-func downloadUrl(tmpdir string, url string, client *http.Client) (error error) {
-	resp, err := client.Get(url)
+func downloadUrl(tmpdir string, tarUrl string, client *http.Client) (err error) {
+	urlObj, err := url.Parse(tarUrl)
 	if err != nil {
-		return
+		log.Fatal(err)
+	}
+
+	req, err := http.NewRequest("GET", tarUrl, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// is this sensible? who knows!
+	if strings.Contains(urlObj.Host, "artifactory") {
+		req.Close = true
+	}
+
+	resp, err := client.Do(req)
+	if err == io.EOF {
+		err = nil
+	}
+
+	if err != nil {
+		log.Printf("%q\n", err)
+		log.Fatal(err)
 	}
 	// fmt.Printf("downloaded %s\n", url)
 	defer resp.Body.Close()
 
-	target := filepath.Join(tmpdir, path.Base(url))
+	target := filepath.Join(tmpdir, path.Base(tarUrl))
 	output, err := os.Create(target)
 	if err != nil {
-		return
+		log.Fatal(err)
 	}
 	defer output.Close()
 
