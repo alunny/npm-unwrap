@@ -26,7 +26,7 @@ func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
 	}
 
 	for _, module := range a.Dependencies {
-		err = decompressAndInstall(module, tmpdir, targetDir, npmbin)
+		err = installModule(module, tmpdir, targetDir, npmbin)
 		if err != nil {
 			return err
 		}
@@ -35,10 +35,10 @@ func (a *App) InstallFromTmpdir(tmpdir string, targetDir string) (err error) {
 	return
 }
 
-func decompressAndInstall(m Module, tmpdir string, targetDir string, npmbin string) (err error) {
+func installModule(m Module, tmpdir string, targetDir string, npmbin string) (err error) {
+	var isGitModule bool
 	if strings.HasPrefix(m.Resolved, "git+") {
-		fmt.Printf("skipping git url %s\n\t%s\n", m.Resolved, targetDir)
-		return
+		isGitModule = true
 	}
 
 	outputDir := filepath.Join(targetDir, m.Name)
@@ -47,7 +47,12 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string, npmbin stri
 		return err
 	}
 
-	err = decompress(m, tmpdir, targetDir, outputDir)
+	if isGitModule {
+		err = copyGitModule(m, tmpdir, outputDir)
+	} else {
+		err = decompress(m, tmpdir, outputDir)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -60,7 +65,7 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string, npmbin stri
 		}
 
 		for _, module := range m.Dependencies {
-			err = decompressAndInstall(module, tmpdir, nodeModulesDir, npmbin)
+			err = installModule(module, tmpdir, nodeModulesDir, npmbin)
 			if err != nil {
 				return err
 			}
@@ -72,7 +77,7 @@ func decompressAndInstall(m Module, tmpdir string, targetDir string, npmbin stri
 	return
 }
 
-func decompress(m Module, tmpdir string, targetDir string, outputDir string) (err error) {
+func decompress(m Module, tmpdir string, outputDir string) (err error) {
 	var basePath string
 	if m.Resolved == "" {
 		basePath = fmt.Sprintf("%s-%s.tgz", m.Name, m.Version)

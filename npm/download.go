@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -17,19 +18,17 @@ import (
 const MaxConcurrentDownloads = 20
 
 func (a *App) DownloadDependencies() (tmpdir string) {
-	deps, gitDeps, err := depsSlice(a)
+	deps, gitModules, err := depsSlice(a)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	sort.Strings(deps)
-	sort.Strings(gitDeps)
 
 	deps = dedupeSlice(deps)
-	gitDeps = dedupeSlice(gitDeps)
 
 	fmt.Printf("tarball dependencies: %d\n", len(deps))
-	fmt.Printf("git dependencies: %d\n", len(gitDeps))
+	fmt.Printf("git dependencies: %d\n", len(gitModules))
 
 	/*
 	for _, dep := range deduped {
@@ -37,8 +36,18 @@ func (a *App) DownloadDependencies() (tmpdir string) {
 	}
 	*/
 
+	tmpdir, err = ioutil.TempDir("", a.Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// download all files - MaxConcurrentDownloads concurrently
-	tmpdir, err = downloadTarballs(a.Name, deps)
+	err = downloadTarballs(tmpdir, deps)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = fetchGitRepos(tmpdir, gitModules)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,7 +63,7 @@ func (a *App) DownloadDependencies() (tmpdir string) {
  * takes package with tree of dependencies, returns slice of URL dependencies (tarballs)
  * and slice of git dependencies (repo URLs + refs)
  */
-func depsSlice(pkg Package) (urls []string, gitUrls []string, error error) {
+func depsSlice(pkg Package) (urls []string, gitModules []Module, error error) {
 	for _, dep := range pkg.DependencyList() {
 		if dep.Resolved == "" {
 			// TODO: potentially resolve with npm-view
@@ -63,22 +72,21 @@ func depsSlice(pkg Package) (urls []string, gitUrls []string, error error) {
 		}
 
 		if strings.HasPrefix(dep.Resolved, "git+") {
-			fmt.Printf("[WARNING] git url for %s\n%s\n", dep.Name, dep.Resolved)
-			gitUrls = append(gitUrls, dep.Resolved)
+			gitModules = append(gitModules, dep)
 		} else {
 			urls = append(urls, dep.Resolved)
 		}
 
 		depDeps, gitDeps, err := depsSlice(dep)
 		if err != nil {
-			return urls, gitUrls, err
+			return urls, gitModules, err
 		}
 
 		urls = append(urls, depDeps...)
-		gitUrls = append(gitUrls, gitDeps...)
+		gitModules = append(gitModules, gitDeps...)
 	}
 
-	return urls, gitUrls, error
+	return urls, gitModules, error
 }
 
 // takes sorted slice orig, returns deduped (still sorted) slice
@@ -102,13 +110,9 @@ func minInt(a int, b int) (min int) {
 	}
 }
 
-func downloadTarballs(appName string, tarballs []string) (tmpdir string, err error) {
+func downloadTarballs(tmpdir string, tarballs []string) (err error) {
 	var wg sync.WaitGroup
 	client := &http.Client{}
-	tmpdir, err = ioutil.TempDir("", appName)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	downloads := make(chan string, MaxConcurrentDownloads)
 	quit := make(chan bool)
@@ -130,6 +134,65 @@ func downloadTarballs(appName string, tarballs []string) (tmpdir string, err err
 
 	wg.Wait()
 	quit <- true
+
+	return
+}
+
+func fetchGitRepos(tmpdir string, gitModules []Module) (err error) {
+	gitbin, err := exec.LookPath("git")
+	if err != nil {
+		log.Fatal("cannot find git in $PATH")
+	}
+
+	for _, m := range gitModules {
+		gitUrl, err := GitUrlFromString(m.Resolved)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(gitbin)
+		fmt.Printf("cloning %s from %s at ref %s\n", m.Name, gitUrl.Url, gitUrl.Ref)
+
+		// clone
+		target := fmt.Sprintf("%s__%s", m.Name, gitUrl.Ref)
+
+		// for some reason, git needs an empty first argument - it only reads
+		// the command from the second arg
+		cloneArgs := []string{"", "clone", gitUrl.Url, target}
+		err = execGit(gitbin, cloneArgs, tmpdir)
+		if err != nil {
+			return err
+		}
+
+		// checkout
+		checkoutArgs := []string{"", "checkout", "-q", gitUrl.Ref}
+		err = execGit(gitbin, checkoutArgs, filepath.Join(tmpdir, target))
+		if err != nil {
+			return err
+		}
+	}
+
+	return
+}
+
+func execGit(gitbin string, args []string, wd string) (err error) {
+	cmd := exec.Cmd{
+		Path: gitbin,
+		Args: args,
+		Dir: wd,
+		Stdout: ioutil.Discard,
+		Stderr: os.Stderr,
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		return
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return
+	}
 
 	return
 }

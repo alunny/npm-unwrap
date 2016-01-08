@@ -26,9 +26,11 @@ func install() {
 	// npm.PrintApp(app)
 
 	downloadDir := app.DownloadDependencies()
+	app.InstallFromTmpdir(downloadDir, "./node_modules")
+
 	// app.DownloadDependencies()
 	// app.Install()
-	app.InstallFromTmpdir(downloadDir, "./node_modules")
+	// app.InstallFromTmpdir("./postinstall", "./node_modules")
 }
 
 func main() {
