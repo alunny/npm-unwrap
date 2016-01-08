@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"path/filepath"
 )
 
 func populateModule(m *Module, dec *json.Decoder) (error error) {
@@ -180,17 +182,25 @@ func ParseApp(r io.Reader) (app App, error error) {
 	return app, nil
 }
 
-// ParseApp reads the package.json data from r, and returns a boolean value if there is
-// a "scripts/install" field. If it cannot parse the data, an error is returned.
-func HasInstallScript(packageJson []byte) (hasScript bool, err error) {
-	var f interface{}
-	err = json.Unmarshal(packageJson, &f)
+func ReadPackageJSON(directory string) (pkg PackageJSON, err error) {
+	pkgFile, err := ioutil.ReadFile(filepath.Join(directory, "package.json"))
 	if err != nil {
 		return
 	}
 
-	m := f.(map[string]interface{})
-	for k, v := range m {
+	var blob interface{}
+	err = json.Unmarshal(pkgFile, &blob)
+	if err != nil {
+		return
+	}
+
+	m := blob.(map[string]interface{})
+
+	return PackageJSON(m), err
+}
+
+func (pkg PackageJSON) HasInstallScript() (hasScript bool, err error) {
+	for k, v := range pkg {
 		switch k {
 		case "scripts":
 			switch scripts := v.(type) {
@@ -206,6 +216,36 @@ func HasInstallScript(packageJson []byte) (hasScript bool, err error) {
 				if scripts["install"] != "" {
 					hasScript = true
 				}
+			}
+		}
+	}
+
+	return
+}
+
+func (pkg PackageJSON) BinScripts() (binScripts map[string]string, err error) {
+	var nameVal string
+	binScripts = make(map[string]string)
+
+	name := pkg["name"]
+	switch val := name.(type) {
+	case string:
+		nameVal = val
+	default:
+		return binScripts, errors.New("unwrap: no name field in package.json")
+	}
+
+	bin := pkg["bin"]
+	switch binVal := bin.(type) {
+	case string:
+		binScripts[nameVal] = binVal
+	case map[string]interface{}:
+		for k, v := range binVal {
+			switch innerVal := v.(type) {
+				case string:
+					binScripts[k] = innerVal
+				default:
+					return binScripts, errors.New("wrong format for bin script")
 			}
 		}
 	}

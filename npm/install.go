@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -72,7 +71,20 @@ func installModule(m Module, tmpdir string, targetDir string, npmbin string) (er
 		}
 	}
 
-	err = tryInstall(npmbin, outputDir)
+	pkg, err := ReadPackageJSON(outputDir)
+	if err != nil {
+		return err
+	}
+
+	err = pkg.runInstallScripts(npmbin, outputDir)
+	if err != nil {
+		return err
+	}
+
+	err = pkg.linkBinScripts(npmbin, outputDir)
+	if err != nil {
+		return err
+	}
 
 	return
 }
@@ -104,15 +116,39 @@ func decompress(m Module, tmpdir string, outputDir string) (err error) {
 	return
 }
 
-func tryInstall(npmbin string, directory string) (err error) {
-	runInstall := []string{"run-script", "install", "--production"}
-	packageJson, err := ioutil.ReadFile(filepath.Join(directory, "package.json"))
+func (pkg PackageJSON) linkBinScripts(npmbin string, directory string) (err error) {
+	binScripts, err := pkg.BinScripts()
 	if err != nil {
+		return err
+	}
+
+	if len(binScripts) == 0 {
 		return
 	}
 
-	//hasInstallScript, err := HasInstallScript(packageJson)
-	hasInstall, err := HasInstallScript(packageJson)
+	binDir := filepath.Join(directory, "../.bin")
+	err = os.MkdirAll(binDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	for scriptName, scriptPath := range binScripts {
+		source := filepath.Join(directory, scriptPath)
+		target := filepath.Join(binDir, scriptName)
+
+		err = os.Symlink(source, target)
+		if err != nil {
+			return err
+		}
+	}
+
+	return
+}
+
+func (pkg PackageJSON) runInstallScripts(npmbin string, directory string) (err error) {
+	runInstall := []string{"run-script", "install", "--production"}
+
+	hasInstall, err := pkg.HasInstallScript()
 	if err != nil {
 		return
 	}

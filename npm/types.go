@@ -8,6 +8,13 @@ import (
 	"regexp"
 )
 
+type GitUrl struct {
+	Url	string
+	Ref	string
+}
+
+type PackageJSON map[string]interface{}
+
 type Module struct {
 	Name         string
 	Version      string
@@ -26,9 +33,9 @@ type Package interface {
 	DependencyList() []Module
 }
 
-type GitUrl struct {
-	Url	string
-	Ref	string
+type Download struct {
+	module		*Module
+	resultChan	chan int
 }
 
 func (m Module) DependencyList() (deps []Module) {
@@ -53,9 +60,4 @@ func GitUrlFromString(str string) (gitUrl GitUrl, err error) {
 	}
 
 	return
-}
-
-type Download struct {
-	module		*Module
-	resultChan	chan int
 }
