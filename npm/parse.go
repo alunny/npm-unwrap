@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"path/filepath"
 )
 
@@ -223,16 +224,23 @@ func (pkg PackageJSON) HasInstallScript() (hasScript bool, err error) {
 	return
 }
 
-func (pkg PackageJSON) BinScripts() (binScripts map[string]string, err error) {
-	var nameVal string
-	binScripts = make(map[string]string)
+func (pkg PackageJSON) Name() (name string, err error) {
+	nameField := pkg["name"]
 
-	name := pkg["name"]
-	switch val := name.(type) {
+	switch val := nameField.(type) {
 	case string:
-		nameVal = val
+		return val, err
 	default:
-		return binScripts, errors.New("unwrap: no name field in package.json")
+		return "", errors.New("unwrap: no name field in package.json")
+	}
+}
+
+func (pkg PackageJSON) BinScripts() (binScripts map[string]string, err error) {
+	binScripts = make(map[string]string)
+	nameVal, err := pkg.Name()
+	if err != nil {
+		log.Println(err)
+		return binScripts, err
 	}
 
 	bin := pkg["bin"]
