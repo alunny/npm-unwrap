@@ -2,6 +2,12 @@
 
 > consistent installs for shrinkwrapped npm projects
 
+## Status
+
+Works okay for npm2 projects. Not recommended for use with npm3 projects.
+
+## Desscriptions
+
 The goal of npm-unwrap is to take an npm-shrinkwrap.json file, and write all of
 the modules to the `node_modules` directory, matching the structure of the JSON.
 
