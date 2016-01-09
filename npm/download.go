@@ -37,42 +37,63 @@ func (a *App) DownloadDependencies() (tmpdir string) {
 	}
 	*/
 
-	tmpdir, err = ioutil.TempDir("", a.Name)
-	if err != nil {
-		log.Fatal(err)
+	var moduleDir string
+	useTmpDir := false
+
+	if useTmpDir {
+		moduleDir, err = ioutil.TempDir("", a.Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		moduleDir = ".module-cache"
+		err = os.MkdirAll(moduleDir, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
+
+	log.Printf("writing to directory: %s\n", moduleDir)
 
 	// download all files - MaxConcurrentDownloads concurrently
-	err = downloadTarballs(tmpdir, deps)
+	err = downloadTarballs(moduleDir, deps)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = fetchGitRepos(tmpdir, gitModules)
+	err = fetchGitRepos(moduleDir, gitModules)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("downloaded dependencies to %s\n", tmpdir)
+	log.Printf("downloaded dependencies to %s\n", moduleDir)
 
 	// get all git repos
 
-	return tmpdir
+	return moduleDir
 }
 
 /*
  * takes package with tree of dependencies, returns slice of URL dependencies (tarballs)
  * and slice of git dependencies (repo URLs + refs)
  */
-func depsSlice(pkg Package) (urls []string, gitModules []Module, error error) {
+func depsSlice(pkg Package) (urls []string, gitModules []Module, err error) {
+	npmbin, err := exec.LookPath("npm")
+	if err != nil {
+		log.Fatal("cannot find npm in $PATH")
+	}
+	npmCommand := NpmCommand{npmbin}
+
 	for _, dep := range pkg.DependencyList() {
 		if dep.Resolved == "" {
-			// TODO: potentially resolve with npm-view
-			fmt.Printf("[WARNING] empty resolved field for %s@%s\n", dep.Name, dep.Version)
-			continue
-		}
+			log.Printf("[WARNING] empty resolved field for %s@%s\n", dep.Name, dep.Version)
+			resolvedUrl, err := npmCommand.view(dep)
+			if err != nil {
+				return urls, gitModules, err
+			}
 
-		if strings.HasPrefix(dep.Resolved, "git+") {
+			urls = append(urls, resolvedUrl)
+		} else if strings.HasPrefix(dep.Resolved, "git+") {
 			gitModules = append(gitModules, dep)
 		} else {
 			urls = append(urls, dep.Resolved)
@@ -88,7 +109,7 @@ func depsSlice(pkg Package) (urls []string, gitModules []Module, error error) {
 		gitModules = append(gitModules, gitDeps...)
 	}
 
-	return urls, gitModules, error
+	return urls, gitModules, err
 }
 
 // takes sorted slice orig, returns deduped (still sorted) slice
@@ -207,12 +228,24 @@ func getTarball(id int, tmpdir string, downloads chan string, client *http.Clien
 			log.Fatal(err)
 		}
 	}
-	log.Printf("done with worker %d\n", id)
+	// log.Printf("done with worker %d\n", id)
 	wg.Done()
 	return
 }
 
 func downloadUrl(tmpdir string, tarUrl string, client *http.Client) (err error) {
+	target := filepath.Join(tmpdir, path.Base(tarUrl))
+	_, statErr := os.Stat(target)
+	if statErr == nil {
+		// log.Printf("reading %s from cache\n", path.Base(tarUrl))
+		return
+	}
+
+	if !os.IsNotExist(statErr) {
+		log.Println(statErr)
+		return statErr
+	}
+
 	urlObj, err := url.Parse(tarUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -225,6 +258,7 @@ func downloadUrl(tmpdir string, tarUrl string, client *http.Client) (err error) 
 
 	// is this sensible? who knows!
 	if strings.Contains(urlObj.Host, "artifactory") {
+		//req.Header.Set("User-Agent", "alunny hates artifactory")
 		req.Close = true
 	}
 
@@ -240,7 +274,6 @@ func downloadUrl(tmpdir string, tarUrl string, client *http.Client) (err error) 
 	// fmt.Printf("downloaded %s\n", url)
 	defer resp.Body.Close()
 
-	target := filepath.Join(tmpdir, path.Base(tarUrl))
 	output, err := os.Create(target)
 	if err != nil {
 		log.Fatal(err)
