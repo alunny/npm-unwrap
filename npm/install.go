@@ -92,7 +92,7 @@ func installModule(m Module, tmpdir string, targetDir string, npmbin string) (er
 func decompress(m Module, tmpdir string, outputDir string) (err error) {
 	var basePath string
 	if m.Resolved == "" {
-		basePath = fmt.Sprintf("%s-%s.tgz", m.Name, m.Version)
+		basePath = path.Base(fmt.Sprintf("%s-%s.tgz", m.Name, m.Version))
 	} else {
 		basePath = path.Base(m.Resolved)
 	}
@@ -172,6 +172,11 @@ func (pkg PackageJSON) linkBinScripts(npmbin string, directory string) (err erro
 
 func (pkg PackageJSON) runInstallScripts(npmbin string, directory string) (err error) {
 	runInstall := []string{"run-script", "install", "--production"}
+
+	pkgName, err := pkg.Name()
+	if err != nil {
+		return
+	}
 
 	hasInstall, err := pkg.HasInstallScript()
 	if err != nil {
