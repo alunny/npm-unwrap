@@ -147,21 +147,21 @@ func (pkg PackageJSON) linkBinScripts(npmbin string, directory string) (err erro
 			return err
 		}
 
+		// bin scripts must always be executable
+		// see https://github.com/npm/npm/blob/2.x/lib/build.js#L190
+		err = os.Chmod(target, 0777)
+		if err != nil {
+			log.Printf("[FATAL] %s is not executable\n", attemptedPath)
+			return err
+		}
+
 		err = os.Symlink(target, scriptName)
 		if os.IsExist(err) {
 			log.Printf("[WARN] symlink: %s already exists\n", attemptedPath)
 			err = nil
 		}
 		if err != nil {
-			log.Fatal(err)
-			return err
-		}
-
-		// bin scripts must always be executable
-		// see https://github.com/npm/npm/blob/2.x/lib/build.js#L190
-		err = os.Chmod(target, 0777)
-		if err != nil {
-			log.Printf("[FATAL] %s is not executable\n", attemptedPath)
+			log.Printf("[FATAL] could not link %s to %s\n", scriptName, target)
 			return err
 		}
 	}
@@ -171,7 +171,7 @@ func (pkg PackageJSON) linkBinScripts(npmbin string, directory string) (err erro
 }
 
 func (pkg PackageJSON) runInstallScripts(npmbin string, directory string) (err error) {
-	runInstall := []string{"run-script", "install", "--production"}
+	runInstall := []string{"npm", "run-script", "install", "--production"}
 
 	pkgName, err := pkg.Name()
 	if err != nil {
